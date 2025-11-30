@@ -1,0 +1,66 @@
+Magit Bash: Accelerate Magit Git Commands over TRAMP via Persistent Bash process.
+
+Magit Bash is an Emacs extension that integrates Magit with a persistent Bash process, significantly accelerating the execution of Git commands when used over TRAMP. By maintaining a dedicated Bash buffer, Magit Bash reduces process startup overhead, resulting in a 2-4x speedup for commands such as =magit-status= and =magit-log=.
+
+* Installation
+
+Add =magit-bash.el= to your Emacs load path and require it:
+
+#+begin_src emacs-lisp
+(require 'magit-bash)
+#+end_SRC
+
+* Usage
+
+Enable =magit-bash-mode= globally to accelerate Magit operations:
+
+#+begin_src emacs-lisp
+(magit-bash-mode 1)
+#+end_src
+
+When enabled, Magit Bash intercepts Magit Git commands and routes them through a persistent Bash process. Caching is enabled by default for certain commands (cf.  =magit-bash-cache-commands=).
+
+Note: It falls back to standard Magit behavior for non-remote (TRAMP) buffers.
+
+* Customization
+
+- =magit-bash-buffer-name=: Name of the Bash buffer (default: "/magit-bash/")
+- =magit-bash-magics=: List of magic symbols for command result detection (=pass=, =fail=)
+- =magit-bash-enable-cache=: Enable/disable caching (default: t)
+- =magit-bash-cache-commands=: List of Git commands to cache
+
+Customize these variables via =M-x customize-group RET magit-bash RET=.
+
+* Tests
+#+begin_src elisp
+  (defvar-local test-magit-bash-total 0)
+
+  (defun test-magit-status-perf (arg)
+    (interactive "P")
+    (when arg
+      (profiler-stop))
+    (let ((start (current-time)))
+      (setq test-magit-bash-total 0)
+      (when arg
+	(profiler-start 'cpu))
+      (magit-status)
+      (when arg
+	(profiler-stop))
+      (message "magit-status() took %.02f, %.02f Git command execution"
+	       (float-time (time-subtract (current-time) start))
+	       test-magit-bash-total)
+      (when arg
+	(profiler-report))))
+
+  (defun test-perf-advice (orig-fun &rest args)
+    (let ((git-args (flatten-list (cdr args)))
+	  (start (current-time))
+	  (ret (apply orig-fun args)))
+      (let ((diff (float-time (time-subtract (current-time) start))))
+	;; (message "Git %s took %.02f" git-args diff)
+	(incf test-magit-bash-total diff))
+      ret))
+
+  (advice-add 'magit-bash--revparse :around #'test-perf-advice)
+  (advice-remove 'magit-bash--revparse :around #'test-perf-advice)
+#+end_src
