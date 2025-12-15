@@ -201,21 +201,23 @@ CONNECTION-TYPE."
     (magit-bash-process-cmd cmd input destination)))
 
 (defun magit-bash-load-files-attributes (files)
-  (let* ((test-and-props '(("-e" . "exists-p")
-			   ("-r" . "readable-p")
-			   ("-w" . "writable-p")
-			   ("-d" . "directory-p")))
+  (let* ((test-and-props '(("-e" . "file-exists-p")
+			   ("-r" . "file-readable-p")
+			   ("-w" . "file-writable-p")
+			   ("-d" . "file-directory-p")
+			   ("-L" . "file-symlink-p")))
 	 (tests (mapconcat (lambda (tp)
-			     (format "if [ %s \"$file\" ]; then echo -n ' %s'; fi"
+			     (format "[ %s \"$file\" ] && echo -n ' %s'"
 				     (car tp) (cdr tp)))
 			   test-and-props " ; "))
+	 (truename "[ -e \"$file\" ] && echo '' && readlink -nf \"$file\"")
 	 (cmd (concat "for file in "
 		      (mapconcat (lambda (file)
 				   (format "'%s' "
 					   (tramp-file-name-localname
 					    (tramp-dissect-file-name file))))
 				 files " ")
-		      "; do " tests
+		      "; do " tests " ; " truename
 		      "; echo ''"
 		      "; done")))
     (with-temp-buffer
@@ -228,11 +230,16 @@ CONNECTION-TYPE."
 				  (line-beginning-position) (line-end-position)))))
 	  (dolist (tp test-and-props)
 	    (let ((localname (tramp-file-name-localname (tramp-dissect-file-name file))))
-	      (message "%s %s %s" localname (cdr tp) (if (member (cdr tp) res) t nil))
 	      (with-parsed-tramp-file-name file nil
 		(tramp-set-file-property
-		 v localname (concat "file-" (cdr tp))
-		 (if (member (cdr tp) res) t nil)))))
+		 v localname (cdr tp) (if (member (cdr tp) res) t nil)))))
+	  (with-parsed-tramp-file-name file nil
+	    (when (member "file-exists-p" res)
+	      (forward-line)
+	      (tramp-set-file-property
+	       v localname "file-truename"
+	       (buffer-substring-no-properties (line-beginning-position)
+					       (line-end-position)))))
 	  (forward-line))))))
 
 (defvar-local magit-bash-git-tree-files '())
