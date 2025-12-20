@@ -299,19 +299,20 @@ CONNECTION-TYPE."
 (defvar magit-boost--progress nil)
 
 (defun magit-boost--git-cmd-wrapper (orig-fun &rest args)
-  (when magit-boost-feedback
+  (when (and magit-boost-feedback magit-boost--progress)
     (progress-reporter-update magit-boost--progress))
   (let ((start-time (current-time))
 	(ret (apply orig-fun args))
 	suffix)
-    (when (eq magit-boost-feedback 'performance)
-      (let ((cmd (propertize (mapconcat #'identity (append (list "git")
-							   (flatten-list (cddr args)))
-					" ")
-			     'face 'font-lock-string-face)))
-	(setf suffix (format "%s took %.02fs"
-  			     cmd (float-time (time-subtract (current-time) start-time))))))
-    (progress-reporter-update magit-boost--progress nil suffix)
+    (when magit-boost--progress
+      (when (eq magit-boost-feedback 'performance)
+	(let ((cmd (propertize (mapconcat #'identity (append (list "git")
+							     (flatten-list (cddr args)))
+					  " ")
+			       'face 'font-lock-string-face)))
+	  (setf suffix (format "%s took %.02fs"
+  			       cmd (float-time (time-subtract (current-time) start-time))))))
+      (progress-reporter-update magit-boost--progress nil suffix))
     ret))
 
 (defun magit-boost--entry-wrapper (orig-fun &rest args)
