@@ -1,4 +1,4 @@
-;;; magit-bash.el --- Integrate Magit with Bash processes. -*- lexical-binding: t; -*-
+;;; magit-boost.el --- Boost Magit performance on slow network. -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2025 Jérémy Compostella
 
@@ -24,8 +24,8 @@
 
 ;;; Commentary:
 ;;
-;; Magit Bash enhances the speed of Git command execution by leveraging a
-;; persistent bash process.  This package initializes and manages dedicated Bash
+;; Magit Boost enhances the speed of Git command execution by leveraging a
+;; persistent bash process.  This package initializes and manages dedicated Boost
 ;; buffers, intercepts Git commands from Magit, and executes them using the
 ;; running bash process.  In my experience, this results in a 2-4x performance
 ;; boost for commands like `magit-status' and `magit-log'.
@@ -34,45 +34,45 @@
 (require 'magit)
 (require 'tramp)
 
-(defcustom magit-bash-buffer-name "*magit-bash*"
+(defcustom magit-boost-buffer-name "*magit-boost*"
   "Name of the magit bash buffer."
   :type 'string)
 
-(defcustom magit-bash-debug nil
-  "If non-nil, enable debug messages for Magit Bash."
+(defcustom magit-boost-debug nil
+  "If non-nil, enable debug messages for Magit Boost."
   :type 'boolean)
 
-(defcustom magit-bash-feedback 'progress
+(defcustom magit-boost-feedback 'progress
   "Type of feedback to show during long operations.
 Could be 'progress or 'performance."
   :type '(choice (const :tag "Progress reporter" progress)
 		 (const :tag "Performance messages" performance)))
 
-(defvar-local magit-bash--git-dir nil
+(defvar-local magit-boost--git-dir nil
   "Buffer-local variable to cache the Git tree object for the current
 repository.")
 
-(defvar-local magit-bash--git-dir-truename nil
+(defvar-local magit-boost--git-dir-truename nil
   "Buffer-local variable to cache the Git tree object for the current
 repository.")
 
-(defun magit-bash-filter (process string)
-  "Process filter for Magit Bash buffers.
+(defun magit-boost-filter (process string)
+  "Process filter for Magit Boost buffers.
 
 Append STRING, the output from PROCESS, to the end of the buffer
 associated with PROCESS. This function is used to collect and display
-output from the Bash process in the Magit Bash buffer."
+output from the Bash process in the Magit Boost buffer."
   (with-current-buffer (process-buffer process)
     (goto-char (point-max))
     (insert string)))
 
-(defun magit-bash-buffers ()
-  "Return a list of all Magit Bash buffers."
+(defun magit-boost-buffers ()
+  "Return a list of all Magit Boost buffers."
   (seq-filter (lambda (b)
-		(string-prefix-p magit-bash-buffer-name (buffer-name b)))
+		(string-prefix-p magit-boost-buffer-name (buffer-name b)))
 	      (buffer-list)))
 
-(defvar-local magit-bash-connection-type nil
+(defvar-local magit-boost-connection-type nil
   "Buffer-local variable specifying the connection type for the Magit Bash
 process.
 
@@ -88,19 +88,19 @@ required for interactive commands and for proper handling of Magit output.
 containing carriage return characters (\\r), as pty processes can have issues
 with such input.
 
-This variable is automatically set when creating a new Magit Bash buffer via
-`magit-bash-new-buffer', and is used to ensure the correct process connection
+This variable is automatically set when creating a new Magit Boost buffer via
+`magit-boost-new-buffer', and is used to ensure the correct process connection
 type is chosen for each Git command execution.")
 
-(defun magit-bash--git-dir (dir)
+(defun magit-boost--git-dir (dir)
   (with-temp-buffer
     (setq default-directory dir)
     (if (= (process-file "git" nil t nil "rev-parse" "--git-dir") 0)
 	(string-trim (buffer-string))
       (error "Failed to read the git tree"))))
 
-(defun magit-bash-new-buffer (dir connection-type)
-  "Create and return a new Magit Bash buffer for DIR with
+(defun magit-boost-new-buffer (dir connection-type)
+  "Create and return a new Magit Boost buffer for DIR with
 CONNECTION-TYPE."
   (setf dir (with-temp-buffer
 	      (setq default-directory dir)
@@ -108,50 +108,50 @@ CONNECTION-TYPE."
 		(if (= (process-file "git" nil t nil "rev-parse" "--show-toplevel") 0)
 		    (tramp-make-tramp-file-name v (string-trim (buffer-string)))))))
   (if dir
-    (let* ((buf-name (format magit-bash-buffer-name))
+    (let* ((buf-name (format magit-boost-buffer-name))
 	   (buffer (generate-new-buffer buf-name)))
       (uniquify-rationalize-file-buffer-names buf-name default-directory buffer)
       (with-current-buffer buffer
-	(let ((git-dir (magit-bash--git-dir default-directory)))
+	(let ((git-dir (magit-boost--git-dir default-directory)))
 	  (setq default-directory (concat dir "/")
-		magit-bash--git-dir git-dir
-		magit-bash--git-dir-truename (file-truename git-dir)
-		magit-bash-connection-type connection-type)))
+		magit-boost--git-dir git-dir
+		magit-boost--git-dir-truename (file-truename git-dir)
+		magit-boost-connection-type connection-type)))
       buffer)
     (error "No git repository found")))
 
-(defsubst magit-bash--bash-buffer-p (connection-type filename buffer)
-  "Return non-nil if BUFFER is a Magit Bash buffer."
+(defsubst magit-boost--bash-buffer-p (connection-type filename buffer)
+  "Return non-nil if BUFFER is a Magit Boost buffer."
   (with-current-buffer buffer
-    (and (eq magit-bash-connection-type connection-type)
+    (and (eq magit-boost-connection-type connection-type)
 	 (or (string-prefix-p default-directory filename)
-	     (string-prefix-p magit-bash--git-dir-truename filename)))))
+	     (string-prefix-p magit-boost--git-dir-truename filename)))))
 
-(defun magit-bash--existing-buffer (filename connection-type)
-  (cl-find filename (magit-bash-buffers)
-	   :test (apply-partially #'magit-bash--bash-buffer-p
+(defun magit-boost--existing-buffer (filename connection-type)
+  (cl-find filename (magit-boost-buffers)
+	   :test (apply-partially #'magit-boost--bash-buffer-p
 				  connection-type)))
 
-(defun magit-bash-buffer (dir connection-type)
-  "Return a Magit Bash buffer associated with DIR."
-  (let ((buf (or (magit-bash--existing-buffer dir connection-type)
-		 (magit-bash-new-buffer dir connection-type))))
+(defun magit-boost-buffer (dir connection-type)
+  "Return a Magit Boost buffer associated with DIR."
+  (let ((buf (or (magit-boost--existing-buffer dir connection-type)
+		 (magit-boost-new-buffer dir connection-type))))
     (unless (get-buffer-process buf)
       (let* ((process-connection-type connection-type)
-	     (process (start-file-process "magit-bash-process" buf "bash")))
+	     (process (start-file-process "magit-boost-process" buf "bash")))
 	(process-send-string process "export PS1=''\n")
 	(accept-process-output process 1 nil t)
-	(set-process-filter process 'magit-bash-filter)))
+	(set-process-filter process 'magit-boost-filter)))
     buf))
 
-(defun magit-bash--stderr (file)
+(defun magit-boost--stderr (file)
   (if file
       (format "; if [ -e '%s' ]; then cat '%s'; fi" file file)
     ""))
 
-(defun magit-bash-process-cmd (cmd input destination)
+(defun magit-boost-process-cmd (cmd input destination)
   "Execute PROGRAM with ARGS via the Magit Bash process."
-  (let* ((buffer (magit-bash-buffer default-directory
+  (let* ((buffer (magit-boost-buffer default-directory
 				    (if (and input
 					     (goto-char (point-min))
 					     (search-forward "\r" nil t))
@@ -171,7 +171,7 @@ CONNECTION-TYPE."
 	  (setf stderr (cadr destination)
 		cmd (format "%s 2>'%s'" cmd stderr)))
 	(setf cmd (format "%s ; echo __MAGIT_BASH_DONE_$?__ %s"
-			  cmd (magit-bash--stderr stderr)))
+			  cmd (magit-boost--stderr stderr)))
 	(setf cmd (concat "cd " current-dir "; " cmd "; cd - > /dev/null\n"))
 	(save-excursion
 	  (goto-char (point-max))
@@ -193,13 +193,13 @@ CONNECTION-TYPE."
 		    (with-temp-buffer
  		      (insert err)
 		      (write-region (point-min) (point-max) stderr)))))))))
-      (unless magit-bash-debug
+      (unless magit-boost-debug
 	(erase-buffer)))
     (when (and (= ret 0) destination)
       (insert res))
     ret))
 
-(defun magit-bash--process-git (destination args &optional input)
+(defun magit-boost--process-git (destination args &optional input)
   "Execute a Git command via the Magit Bash process."
   (cl-flet ((escape-double-quote (str)
 	      (with-temp-buffer
@@ -214,9 +214,9 @@ CONNECTION-TYPE."
 					 (mapcar #'escape-double-quote
 						 (magit-process-git-arguments args))
 					 " "))))
-      (magit-bash-process-cmd cmd input destination))))
+      (magit-boost-process-cmd cmd input destination))))
 
-(defun magit-bash-load-files-attributes (files)
+(defun magit-boost-load-files-attributes (files)
   (let* ((test-and-props '(("-e" . "file-exists-p")
 			   ("-r" . "file-readable-p")
 			   ("-w" . "file-writable-p")
@@ -237,7 +237,7 @@ CONNECTION-TYPE."
 		      "; echo ''"
 		      "; done")))
     (with-temp-buffer
-      (let ((ret (magit-bash-process-cmd cmd nil t)))
+      (let ((ret (magit-boost-process-cmd cmd nil t)))
 	(unless (= ret 0)
 	  (error "Failed to read files attributes")))
       (goto-char (point-min))
@@ -262,31 +262,31 @@ CONNECTION-TYPE."
 					       (line-end-position)))))
 	  (forward-line))))))
 
-(defvar-local magit-bash-git-tree-files '())
+(defvar-local magit-boost-git-tree-files '())
 
-(defun magit-bash-get-file-property (orig-fun &rest args)
+(defun magit-boost-get-file-property (orig-fun &rest args)
   (let* ((key (car args))
 	 (localname (cadr args))
 	 (filename (tramp-make-tramp-file-name key localname)))
-    (when-let ((buffer (magit-bash--existing-buffer filename 'pty)))
+    (when-let ((buffer (magit-boost--existing-buffer filename 'pty)))
       (with-current-buffer buffer
-	(when (or (string-prefix-p (concat default-directory magit-bash--git-dir)
+	(when (or (string-prefix-p (concat default-directory magit-boost--git-dir)
 				   filename)
-		  (string-prefix-p magit-bash--git-dir-truename filename))
+		  (string-prefix-p magit-boost--git-dir-truename filename))
 	  (let ((property (caddr args))
 		(default (cadddr args)))
-	    (add-to-list 'magit-bash-git-tree-files filename)
+	    (add-to-list 'magit-boost-git-tree-files filename)
 	    (let ((value (funcall orig-fun key localname property tramp-cache-undefined)))
 	      (when (eq value tramp-cache-undefined)
-		(magit-bash-load-files-attributes magit-bash-git-tree-files)))))))
+		(magit-boost-load-files-attributes magit-boost-git-tree-files)))))))
     (apply orig-fun args)))
 
-(defun magit-bash--show-cdup (dir)
-  (when-let* ((buffer (magit-bash--existing-buffer dir 'pty))
+(defun magit-boost--show-cdup (dir)
+  (when-let* ((buffer (magit-boost--existing-buffer dir 'pty))
 	      (root (with-current-buffer buffer
 		      default-directory)))
     (insert (if (with-current-buffer buffer
-		  (string-prefix-p magit-bash--git-dir-truename dir))
+		  (string-prefix-p magit-boost--git-dir-truename dir))
 		""
 	      (let ((sub (substring dir (length root))))
 		(if (string-empty-p sub)
@@ -296,89 +296,92 @@ CONNECTION-TYPE."
 	    "\n")
     0))
 
-(defvar magit-bash--progress nil)
+(defvar magit-boost--progress nil)
 
-(defun magit-bash--git-cmd-wrapper (orig-fun &rest args)
-  (when magit-bash-feedback
-    (progress-reporter-update magit-bash--progress))
+(defun magit-boost--git-cmd-wrapper (orig-fun &rest args)
+  (when magit-boost-feedback
+    (progress-reporter-update magit-boost--progress))
   (let ((start-time (current-time))
 	(ret (apply orig-fun args))
 	suffix)
-    (when (eq magit-bash-feedback 'performance)
+    (when (eq magit-boost-feedback 'performance)
       (let ((cmd (propertize (mapconcat #'identity (append (list "git")
 							   (flatten-list (cddr args)))
 					" ")
 			     'face 'font-lock-string-face)))
 	(setf suffix (format "%s took %.02fs"
   			     cmd (float-time (time-subtract (current-time) start-time))))))
-    (progress-reporter-update magit-bash--progress nil suffix)
+    (progress-reporter-update magit-boost--progress nil suffix)
     ret))
 
-(defun magit-bash--entry-wrapper (orig-fun &rest args)
-  (let* ((fun-name (propertize (subr-name orig-fun) 'face
+(defun magit-boost--entry-wrapper (orig-fun &rest args)
+  (let* ((fun-name (propertize "magit" 'face
 			       'font-lock-function-call-face)))
-    (when magit-bash-feedback
-      (setq magit-bash--progress (make-progress-reporter (format "%s..." fun-name))))
+    (when magit-boost-feedback
+      (setq magit-boost--progress (make-progress-reporter (format "%s..." fun-name))))
     (let ((start-time (current-time))
 	  (ret (apply orig-fun args)))
-      (cond ((eq magit-bash-feedback 'performance)
+      (cond ((eq magit-boost-feedback 'performance)
 	     (let ((msg (format "%s done. It took %.02f seconds." fun-name
 				(float-time (time-subtract (current-time)
 							   start-time)))))
 	       (message msg)))
-	    ((eq magit-bash-feedback 'progress)
-	     (progress-reporter-done magit-bash--progress)))
+	    ((eq magit-boost-feedback 'progress)
+	     (progress-reporter-done magit-boost--progress)))
       ret)))
 
-(dolist (entry '(magit-bash--revparse))
-  (advice-add entry :around #'magit-bash--git-cmd-wrapper))
+(defcustom magit-boost-entry-points '(magit-status
+				      magit-refresh
+				      magit-checkout
+				      magit-rebase
+				      magit-rebase-interactive)
+  "")
 
-(advice-add 'magit-process-git :around #'magit-bash--git-cmd-wrapper)
+(dolist (entry '(magit-boost--revparse))
+  (advice-add entry :around #'magit-boost--git-cmd-wrapper))
 
-(dolist (entry '(magit-status
-		 magit-refresh
-		 magit-checkout
-		 magit-rebase
-		 magit-rebase-interactive))
-  (advice-add entry :around #'magit-bash--entry-wrapper))
+(advice-add 'magit-process-git :around #'magit-boost--git-cmd-wrapper)
 
-(defun magit-bash--show-toplevel (dir)
-  (when-let* ((buffer (magit-bash-buffer dir 'pty))
+(dolist (entry magit-boost-entry-points)
+  (advice-add entry :around #'magit-boost--entry-wrapper))
+
+(defun magit-boost--show-toplevel (dir)
+  (when-let* ((buffer (magit-boost-buffer dir 'pty))
 	      (root (with-current-buffer buffer
 		      default-directory)))
     (with-parsed-tramp-file-name root r
       (insert r-localname)
       0)))
 
-(defun magit-bash--revparse (orig-fun &rest args)
-  (let ((git-args (flatten-list (cdr args))))
+(defun magit-boost--revparse (orig-fun &rest args)
+  (let ((git-args (flatten-list (cl-copy-list (cdr args)))))
     (if (and (stringp (car git-args)) (string= (car git-args) "rev-parse"))
 	(cond ((string= (cadr git-args) "--show-cdup")
-	       (magit-bash--show-cdup default-directory))
+	       (magit-boost--show-cdup default-directory))
 	      ((string= (cadr git-args) "--show-toplevel")
-	       (magit-bash--show-toplevel default-directory))
+	       (magit-boost--show-toplevel default-directory))
 	      ((string= (cadr git-args) "--git-dir")
-	       (when-let* ((buf (magit-bash--existing-buffer
+	       (when-let* ((buf (magit-boost--existing-buffer
 				 default-directory 'pty))
 			   (git-dir (with-current-buffer buf
-				      magit-bash--git-dir)))
+				      magit-boost--git-dir)))
 		 (insert git-dir)
 		 0))
 	      ((apply orig-fun args)))
       (apply orig-fun args))))
 
-(defun magit-bash-process-git (orig-fun &rest args)
+(defun magit-boost-process-git (orig-fun &rest args)
   "Advice for `magit-process-git' to optionally route Git commands through
 a persistent Bash process.
 
 If the current buffer's `default-directory' is a TRAMP (remote), execute
-the Git command using Magit Bash's accelerated Bash process, passing
+the Git command using Magit Boost's accelerated Bash process, passing
 DESTINATION (the first element of ARGS) and the prepared Git arguments."
   (if (tramp-tramp-file-p default-directory)
-      (magit-bash--process-git (car args) (cdr args))
+      (magit-boost--process-git (car args) (cdr args))
     (apply orig-fun args)))
 
-(defun magit-bash-run-git-with-input (orig-fun &rest args)
+(defun magit-boost-run-git-with-input (orig-fun &rest args)
   "Advice for `magit-run-git-with-input' to accelerate Git commands via a
 persistent Bash process.
 
@@ -390,28 +393,28 @@ the current buffer's contents as input to the command. This reduces
 process startup overhead and improves performance for repeated Git
 operations."
   (if (tramp-tramp-file-p default-directory)
-      (magit-bash--process-git t args (buffer-string))
+      (magit-boost--process-git t args (buffer-string))
     (apply orig-fun args)))
 
-(defun magit-bash--vc-responsible-backend (orig-fun &rest args)
-  "If a Magit Bash buffer with a 'pty connection exists, return Git.
+(defun magit-boost--vc-responsible-backend (orig-fun &rest args)
+  "If a Magit Boost buffer with a 'pty connection exists, return Git.
 
 This avoids invoking the slower default implementation of
 `vc-responsible-backend', which can be a performance bottleneck in Magit."
-  (if (magit-bash--existing-buffer (car args) 'pty)
+  (if (magit-boost--existing-buffer (car args) 'pty)
       "Git"
     (apply orig-fun args)))
 
-(defun magit-bash--tramp-sh-handle-file-writable-p (orig-fun &rest args)
-  (if (magit-bash--existing-buffer (car args) 'pty)
+(defun magit-boost--tramp-sh-handle-file-writable-p (orig-fun &rest args)
+  (if (magit-boost--existing-buffer (car args) 'pty)
       t
     (apply orig-fun args)))
 
-(define-minor-mode magit-bash-mode
+(define-minor-mode magit-boost-mode
   "Minor mode to accelerate Magit Git commands by routing them through a
 persistent Bash process.
 
-When enabled, `magit-bash-mode' intercepts Magit Git commands and
+When enabled, `magit-boost-mode' intercepts Magit Git commands and
 executes them using a dedicated Bash process, reducing process startup
 overhead and improving performance, especially for repeated commands.
 
@@ -426,26 +429,26 @@ Note: This mode may not be compatible with remote (TRAMP) buffers."
   :init-value nil
   :global t
   :lighter " MB"
-  (if magit-bash-mode
+  (if magit-boost-mode
       (progn
 	(advice-add 'magit-process-git
-		    :around #'magit-bash-process-git)
+		    :around #'magit-boost-process-git)
 	(advice-add 'magit-run-git-with-input
-		    :around #'magit-bash-run-git-with-input)
+		    :around #'magit-boost-run-git-with-input)
 	(advice-add 'vc-responsible-backend
-		    :around #'magit-bash--vc-responsible-backend)
-	(advice-add 'magit-bash--process-git
-		    :around #'magit-bash--revparse)
+		    :around #'magit-boost--vc-responsible-backend)
+	(advice-add 'magit-boost--process-git
+		    :around #'magit-boost--revparse)
 	(advice-add 'tramp-get-file-property
-		    :around #'magit-bash-get-file-property))
-    (advice-remove 'magit-process-git #'magit-bash-process-git)
-    (advice-remove 'magit-run-git-with-input #'magit-bash-run-git-with-input)
-    (advice-remove 'vc-responsible-backend #'magit-bash--vc-responsible-backend)
+		    :around #'magit-boost-get-file-property))
+    (advice-remove 'magit-process-git #'magit-boost-process-git)
+    (advice-remove 'magit-run-git-with-input #'magit-boost-run-git-with-input)
+    (advice-remove 'vc-responsible-backend #'magit-boost--vc-responsible-backend)
     (advice-remove 'tramp-sh-handle-file-writable-p
-		   #'magit-bash--tramp-sh-handle-file-writable-p)
-    (advice-remove 'magit-bash--process-git
-		   #'magit-bash--revparse)
+		   #'magit-boost--tramp-sh-handle-file-writable-p)
+    (advice-remove 'magit-boost--process-git
+		   #'magit-boost--revparse)
     (advice-remove 'tramp-get-file-property
-		   #'magit-bash-get-file-property)))
+		   #'magit-boost-get-file-property)))
 
-(provide 'magit-bash)
+(provide 'magit-boost)
