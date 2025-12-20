@@ -52,7 +52,9 @@ Could be 'progress or 'performance."
 				      magit-refresh
 				      magit-checkout
 				      magit-rebase
-				      magit-rebase-interactive)
+				      magit-rebase-interactive
+				      magit-log
+				      magit-log-current)
   "")
 
 (defvar-local magit-boost--git-dir nil
