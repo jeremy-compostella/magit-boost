@@ -198,7 +198,7 @@ CONNECTION-TYPE."
 	(cappend "; export RET=$?")
 	(when stderr-dest
 	  (cappend "; echo -n " stderr-magic
-		   "; if [ -e '" stderr-local "']"
+		   "; if [ -e '" stderr-local "' ]"
 		   "; then cat '" stderr-local "'; fi"))
 	(cprepend "cd " dir ";")
 	(cappend "; echo " done-magic " $RET; cd - > /dev/null\n"))
