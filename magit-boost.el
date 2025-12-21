@@ -128,6 +128,7 @@ CONNECTION-TYPE."
 	(let ((git-dir (magit-boost-git-dir default-directory)))
 	  (setq default-directory (concat dir "/")
 		magit-boost-git-dir git-dir
+		magit-boost-git-tree-files (list (concat default-directory git-dir))
 		magit-boost-git-dir-truename (file-truename git-dir)
 		magit-boost-connection-type connection-type)))
       buffer)
