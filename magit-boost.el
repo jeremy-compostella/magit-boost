@@ -42,21 +42,6 @@
   "If non-nil, enable debug messages for Magit Boost."
   :type 'boolean)
 
-(defcustom magit-boost-feedback 'progress
-  "Type of feedback to show during long operations.
-Could be 'progress or 'performance."
-  :type '(choice (const :tag "Progress reporter" progress)
-		 (const :tag "Performance messages" performance)))
-
-(defcustom magit-boost-entry-points '(magit-status
-				      magit-refresh
-				      magit-checkout
-				      magit-rebase
-				      magit-rebase-interactive
-				      magit-log
-				      magit-log-current)
-  "")
-
 (defvar-local magit-boost-git-dir nil
   "Buffer-local variable to cache the Git tree object for the current
 repository.")
@@ -66,8 +51,6 @@ repository.")
 repository.")
 
 (defvar-local magit-boost-git-tree-files '())
-
-(defvar magit-boost--progress nil)
 
 (defun magit-boost-filter (process string)
   "Process filter for Magit Boost buffers.
@@ -325,39 +308,6 @@ multiple synchronous remote calls with a single batch execution."
 	      (magit-boost-load-files-attributes magit-boost-git-tree-files))))))
     (apply orig-fun args)))
 
-(defun magit-boost--git-cmd-wrapper (orig-fun &rest args)
-  (when (and magit-boost-feedback magit-boost--progress)
-    (progress-reporter-update magit-boost--progress))
-  (let ((start-time (current-time))
-	(ret (apply orig-fun args))
-	suffix)
-    (when magit-boost--progress
-      (when (eq magit-boost-feedback 'performance)
-	(let ((cmd (propertize (mapconcat #'identity (append (list "git")
-							     (flatten-list (cdr args)))
-					  " ")
-			       'face 'font-lock-string-face)))
-	  (setf suffix (format "%s took %.02fs"
-  			       cmd (float-time (time-subtract (current-time) start-time))))))
-      (progress-reporter-update magit-boost--progress nil suffix))
-    ret))
-
-(defun magit-boost--entry-wrapper (orig-fun &rest args)
-  (let* ((fun-name (propertize (if (subrp orig-fun) (subr-name orig-fun) "magit")
-			       'face 'font-lock-function-call-face)))
-    (when magit-boost-feedback
-      (setq magit-boost--progress (make-progress-reporter (format "%s..." fun-name))))
-    (let ((start-time (current-time))
-	  (ret (apply orig-fun args)))
-      (cond ((eq magit-boost-feedback 'performance)
-	     (let ((msg (format "%s... done, took %.02fs" fun-name
-				(float-time (time-subtract (current-time)
-							   start-time)))))
-	       (message msg)))
-	    ((eq magit-boost-feedback 'progress)
-	     (progress-reporter-done magit-boost--progress)))
-      ret)))
-
 (defun magit-boost-rev-parse--show-cdup (dir)
   (when-let ((cdup (with-magit-boost-buffer dir 'pty
 		     (if (magit-boost-in-git-dir dir)
@@ -443,21 +393,79 @@ Note: This mode may not be compatible with remote (TRAMP) buffers."
 	(advice-add 'magit-run-git-with-input
 		    :around #'magit-boost-run-git-with-input)
 	(advice-add 'vc-responsible-backend
-		    :around #'magit-boost--vc-responsible-backend)
+		    :around #'magit-boost-vc-responsible-backend)
 	(advice-add 'tramp-get-file-property
-		    :around #'magit-boost-get-file-property)
-	(advice-add 'magit-process-git
-		    :around #'magit-boost--git-cmd-wrapper)
-	(dolist (entry magit-boost-entry-points)
-	  (advice-add entry :around #'magit-boost--entry-wrapper)))
+		    :around #'magit-boost-get-file-property))
     (advice-remove 'magit-process-git #'magit-boost-process-git)
     (advice-remove 'magit-run-git-with-input #'magit-boost-run-git-with-input)
-    (advice-remove 'vc-responsible-backend #'magit-boost--vc-responsible-backend)
-    (advice-remove 'tramp-get-file-property
-		   #'magit-boost-get-file-property)
-    (advice-remove #'magit-process-git
-		   #'magit-boost--git-cmd-wrapper)
-    (dolist (entry magit-boost-entry-points)
-      (advice-remove entry #'magit-boost--entry-wrapper))))
+    (advice-remove 'vc-responsible-backend #'magit-boost-vc-responsible-backend)
+    (advice-remove 'tramp-get-file-property #'magit-boost-get-file-property)))
+
+(defcustom magit-boost-progress-entry-points
+  '(magit-status magit-refresh magit-checkout magit-rebase
+    magit-rebase-interactive-1 magit-log-setup-buffer)
+  "List of Magit commands that trigger the progress reporter."
+  :type '(repeat symbol))
+
+(defvar magit-boost-progress nil
+  "The active progress reporter object updated during Git command
+execution.")
+
+(defun magit-boost-progress-init ()
+  "Initialize the progress reporter and return its display name."
+  (let ((name (propertize (if magit-boost-mode "Magit-Boost" "Magit")
+			  'face 'font-lock-function-call-face)))
+    (setq magit-boost-progress (make-progress-reporter (format "%s..." name)))
+    name))
+
+(defun magit-boost-git-command-progress (orig-fun &rest args)
+  "Report Git command execution time."
+  (let* ((flatten-args (flatten-list (cdr args)))
+	 (cmd (mapconcat #'identity (nconc (list "git") flatten-args) " "))
+	 (suffix (propertize (concat cmd "...") 'face 'font-lock-string-face))
+	 (start-time (current-time)))
+    (unless magit-boost-progress
+      (magit-boost-progress-init))
+    (progress-reporter-update magit-boost-progress suffix)
+    (let ((ret (apply orig-fun args))
+	  (duration (float-time (time-subtract (current-time) start-time))))
+      (setf suffix (format "%s done, took %.02fs" suffix duration))
+      (progress-reporter-update magit-boost-progress nil suffix)
+      ret)))
+
+(defun magit-boost-entry-progress (orig-fun &rest args)
+  "Wrap Magit entry points to report total execution time."
+  (let* ((name (magit-boost-progress-init))
+	 (start-time (current-time))
+	 (ret (apply orig-fun args))
+	 (duration (float-time (time-subtract (current-time) start-time))))
+    (message (format "%s... done, took %.02fs" name duration))
+    ret))
+
+(define-minor-mode magit-boost-progress-mode
+  "Minor mode to display progress and performance timing for Magit
+commands.
+
+When enabled, this mode provides visual feedback in the echo area
+during Git operations. It uses a progress reporter to show the
+currently executing Git command and logs the total execution time
+of major Magit entry points (defined in
+`magit-boost-progress-entry-points`) once they complete.
+
+This is particularly useful on slow networks to confirm that Magit is
+actively working and to measure the performance benefits provided by
+Magit Boost."
+  :init-value nil
+  :global t
+  (if magit-boost-progress-mode
+      (progn
+	(advice-add 'magit-process-git
+		    :around #'magit-boost-git-command-progress)
+	(dolist (entry magit-boost-progress-entry-points)
+	  (advice-add entry :around #'magit-boost-entry-progress)))
+    (advice-remove 'magit-process-git
+		   #'magit-boost-git-command-progress)
+    (dolist (entry magit-boost-progress-entry-points)
+      (advice-remove entry #'magit-boost-entry-progress))))
 
 (provide 'magit-boost)
