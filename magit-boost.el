@@ -39,7 +39,14 @@
   :type 'string)
 
 (defcustom magit-boost-debug nil
-  "If non-nil, enable debug messages for Magit Boost."
+  "When non-nil, enable debug logging for Magit Boost.
+
+If enabled, Magit Boost will:
+1. Insert the raw shell commands sent to the Bash process into the
+boost buffer for inspection.
+2. Prevent the boost buffer from being erased after a command
+completes, allowing you to review the full history of stdout
+and stderr."
   :type 'boolean)
 
 (defvar-local magit-boost-git-dir nil
