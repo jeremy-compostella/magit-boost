@@ -365,7 +365,7 @@ operations."
       (magit-boost--process-git t args (buffer-string))
     (apply orig-fun args)))
 
-(defun magit-boost--vc-responsible-backend (orig-fun &rest args)
+(defun magit-boost-vc-responsible-backend (orig-fun &rest args)
   "If a Magit Boost buffer with a 'pty connection exists, return Git.
 
 This avoids invoking the slower default implementation of
@@ -376,23 +376,10 @@ This avoids invoking the slower default implementation of
 
 (define-minor-mode magit-boost-mode
   "Minor mode to accelerate Magit Git commands by routing them through a
-persistent Bash process.
-
-When enabled, `magit-boost-mode' intercepts Magit Git commands and
-executes them using a dedicated Bash process, reducing process startup
-overhead and improving performance, especially for repeated commands.
-
-This mode works by advising `magit-process-git' and
-`magit-run-git-with-input' to use the Bash process.  When disabled, the
-original Magit behavior is restored.
-
-Enable this mode globally to benefit from faster Magit operations in all
-buffers.
-
-Note: This mode may not be compatible with remote (TRAMP) buffers."
+persistent Bash process."
   :init-value nil
   :global t
-  :lighter " MB"
+  :lighter " MBoost"
   (if magit-boost-mode
       (progn
 	(advice-add 'magit-process-git
