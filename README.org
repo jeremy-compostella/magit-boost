@@ -47,3 +47,10 @@ The progress reporting feature can be enabled as follows:
 #+end_src
 
 Magit-Boost disables itself on local Git repositories where it can be counter-productive.
+
+* TODO
+1. All the files appears write-protected
+2. Look into the Magit issue that re-enters Tramp during an interactive rebase.
+3. Flush file property during rebase to avoid the undesirable file protected overwrite question.
+4. Advise tramp-handle-insert-file-contents? (magit status, when a rebase is in progress, reads many files). Can this be optimized?
+5. Handle asynchronous process if possible.
