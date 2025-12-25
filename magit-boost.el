@@ -370,6 +370,28 @@ multiple synchronous remote calls with a single batch execution."
 	    magit-boost-git-dir))
   0)
 
+(defun magit-boost-insert-file-contents (orig-fun &rest args)
+  (let* ((filename (expand-file-name (car args)))
+	 (visit (cadr args))
+	 (buffer (current-buffer))
+	 (ret (when (cl-every #'null (cddr args))
+		(with-magit-boost-buffer filename 'pty
+		  (when (magit-boost-in-git-dir filename)
+		    (with-parsed-tramp-file-name filename r
+		      (let ((cmd (concat "cat " r-localname)))
+			(with-current-buffer buffer
+			  (save-excursion
+			    (magit-boost-process-cmd cmd nil t))))))))))
+    (if (and (numberp ret) (= ret 0))
+	(progn
+	  (when visit
+	    (setq buffer-file-name filename
+		  buffer-read-only (not (file-writable-p filename)))
+	    (set-visited-file-modtime)
+	    (set-buffer-modified-p nil))
+	  (list filename (1- (point-max))))
+      (apply orig-fun args))))
+
 (defun magit-boost-process-git (orig-fun &rest args)
   "Advice for `magit-process-git' to optionally route Git commands through
 a persistent Bash process.
@@ -424,11 +446,15 @@ persistent Bash process."
 	(advice-add 'tramp-get-file-property
 		    :around #'magit-boost-get-file-property)
 	(advice-add 'tramp-sh-handle-file-writable-p
-		    :around #'magit-boost-tramp-sh-handle-file-writable-p))
+		    :around #'magit-boost-tramp-sh-handle-file-writable-p)
+	(advice-add 'insert-file-contents
+		    :around #'magit-boost-insert-file-contents))
     (advice-remove 'magit-process-git #'magit-boost-process-git)
     (advice-remove 'magit-run-git-with-input #'magit-boost-run-git-with-input)
     (advice-remove 'vc-responsible-backend #'magit-boost-vc-responsible-backend)
     (advice-remove 'tramp-get-file-property #'magit-boost-get-file-property)
+    (advice-remove 'tramp-sh-handle-file-writable-p
+		   #'magit-boost-tramp-sh-handle-file-writable-p)
     (advice-remove 'insert-file-contents
 		   #'magit-boost-insert-file-contents)))
 
