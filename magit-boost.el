@@ -274,6 +274,7 @@ injected directly into the Tramp property cache.
 This significantly improves performance on slow networks by replacing
 multiple synchronous remote calls with a single batch execution."
   (let* ((test-and-props '(("-e" . "file-exists-p")
+			   ("-f" . "file-regular-p")
 			   ("-r" . "file-readable-p")
 			   ("-w" . "file-writable-p")
 			   ("-d" . "file-directory-p")
