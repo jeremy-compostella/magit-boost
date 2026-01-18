@@ -531,7 +531,7 @@ This avoids invoking the slower default implementation of
 (defun magit-boost-start-file-process (orig-fun name buffer program &rest args)
   (if (string= program "git")
       (let ((local-dir (tramp-file-name-localname
-		    (tramp-dissect-file-name default-directory))))
+			(tramp-dissect-file-name default-directory))))
 	(with-magit-boost-buffer default-directory 'pty
 	  (when (file-remote-p default-directory)
 	    (unless (equal program "env")
