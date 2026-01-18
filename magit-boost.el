@@ -552,7 +552,10 @@ This avoids invoking the slower default implementation of
     (apply orig-fun name buffer program args)))
 
 (defun magit-boost-with-editor-process-filter (orig-fun &rest args)
-  (funcall #'magit-boost-filter (car args) (cadr args))
+  "Advice function to ensure that `magit-boost-filter' is
+invoked."
+  (when magit-boost-git-dir
+    (funcall #'magit-boost-filter (car args) (cadr args)))
   (apply orig-fun args))
 
 (define-minor-mode magit-boost-mode
