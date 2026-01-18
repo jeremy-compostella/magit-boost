@@ -67,6 +67,10 @@ repository.")
 
 (defvar-local magit-boost-git-tree-files '())
 
+(defvar-local magit-boost-process-environment '()
+  "Buffer-local variable caching the `process-environment' when the
+Magit Boost Bash process was initiated.")
+
 (defvar-local magit-boost-cmd-state nil
   "Variable tracking the state of the current command.
 This variable ensures proper serialization and state management
@@ -215,6 +219,8 @@ variables instead of determining them."
     (unless (get-buffer-process buffer)
       (let* ((process-connection-type connection-type)
 	     (process (start-file-process "magit-boost-process" buffer "bash")))
+	(with-current-buffer buffer
+	  (setq magit-boost-process-environment process-environment))
 	(process-send-string process "export PS1=''\n")
 	(accept-process-output process 1 nil t)
 	(set-process-filter process #'magit-boost-filter)))
@@ -224,6 +230,9 @@ variables instead of determining them."
   (declare (indent 2))
   `(with-current-buffer (magit-boost-buffer-create ,directory ,connection-type)
      (progn ,@body)))
+
+(defsubst magit-boost-format-arg (arg)
+  (concat "'" (replace-regexp-in-string "'" "'\"'\"'" arg) "'"))
 
 (defun magit-boost-submit-cmd (local-dir cmd input destination)
   (unless (eq magit-boost-cmd-state 'free)
@@ -249,7 +258,12 @@ variables instead of determining them."
 	       "; if [ -e '" stderr-local "' ]"
 	       "; then cat '" stderr-local "'; fi")
       (cprepend "cd " dir ";")
-      (cappend "; echo $RET " done-magic "; cd - > /dev/null\n"))
+      (cappend "; echo $RET " done-magic "; cd - > /dev/null")
+      (when-let ((env (cl-set-difference process-environment
+					 magit-boost-process-environment)))
+	(setf cmd (format "(export %s && %s )"
+			  (mapconcat #'magit-boost-format-arg env " ") cmd)))
+      (cappend "\n"))
     (when magit-boost-debug
       (save-excursion
 	(goto-char (point-max))
@@ -323,14 +337,10 @@ variables instead of determining them."
 				       (cadr git-args))))
 	     (functionp fun))
 	(funcall fun default-directory)
-      (cl-flet* ((escape-quotes (str)
-		   (replace-regexp-in-string "\"" "\\\\\"" str))
-		 (format-arg (arg)
-		   (format "\"%s\"" (escape-quotes arg))))
-	(let ((cmd (mapconcat #'format-arg
-			      (magit-process-git-arguments args)
-			      " ")))
-	(magit-boost-process-cmd (concat "git " cmd) input destination))))))
+      (let ((cmd (mapconcat #'magit-boost-format-arg
+			    (magit-process-git-arguments args)
+			    " ")))
+	(magit-boost-process-cmd (concat "git " cmd) input destination)))))
 
 (defun magit-boost-load-files-attributes (files)
   "Batch load and cache Tramp file attributes for FILES.
@@ -527,24 +537,18 @@ This avoids invoking the slower default implementation of
 	    (unless (equal program "env")
 	      (push program args)
 	      (setq program "env"))
-	    (cl-flet* ((escape-quotes (str)
-			 (replace-regexp-in-string "'" "'\"'\"'" str))
-		       (format-arg (arg)
-			 (format "'%s'" (escape-quotes arg))))
-	      (let ((cmd (format "%s=%s %s"  with-editor--envvar
-				 (format-arg with-editor-sleeping-editor)
-				 (mapconcat #'format-arg args " ")))
-		    (process (get-buffer-process (current-buffer))))
-		(set-process-filter process #'with-editor-process-filter)
-		(magit-boost-submit-cmd local-dir cmd nil nil)
-		(when (member "rebase" args)
-		  (setq magit-boost-cmd-flush-file-properties t))
-		;; Magit is going to appropriate the buffer, we need to store
-		;; the original buffer to reclaim the process later.
-		(process-put process 'magit-boost-buffer (current-buffer))
-		(process-put process 'default-dir default-directory)
-		(accept-process-output process 1 nil t)
-		process)))))
+	    (let ((cmd (mapconcat #'magit-boost-format-arg args " "))
+		  (process (get-buffer-process (current-buffer))))
+	      (set-process-filter process #'with-editor-process-filter)
+	      (magit-boost-submit-cmd local-dir cmd nil nil)
+	      (when (member "rebase" args)
+		(setq magit-boost-cmd-flush-file-properties t))
+	      ;; Magit is going to appropriate the buffer, we need to store
+	      ;; the original buffer to reclaim the process later.
+	      (process-put process 'magit-boost-buffer (current-buffer))
+	      (process-put process 'default-dir default-directory)
+	      (accept-process-output process 1 nil t)
+	      process))))
     (apply orig-fun name buffer program args)))
 
 (defun magit-boost-with-editor-process-filter (orig-fun &rest args)
