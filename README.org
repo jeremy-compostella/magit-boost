@@ -1,4 +1,6 @@
- Magit Boost is an Emacs package meticulously engineered to dramatically accelerate Magit's performance, especially when operating over high-latency networks, such as corporate VPNs, cloud development environments, or any remote setup accessed via TRAMP.
+#+options: toc:nil
+
+Magit Boost is an Emacs package meticulously engineered to dramatically accelerate Magit's performance, especially when operating over high-latency networks, such as corporate VPNs, cloud development environments, or any remote setup accessed via TRAMP.
 
 * The Problem
 
@@ -105,17 +107,6 @@ The progress reporting feature can be enabled as follows:
 #+end_src
 
 Magit-Boost disables itself on local Git repositories where it can be counter-productive.
-
-* TODO
-1. All the files appears write-protected
-2. Look into the Magit issue that re-enters Tramp during an interactive rebase.
-3. Flush file property during rebase to avoid the undesirable file protected overwrite question.
-4. Advise tramp-handle-insert-file-contents? (magit status, when a rebase is in progress, reads many files). Can this be optimized?
-5. Handle asynchronous process if possible.
-6. Invalidate TRAMP cache on rebase command
-7. magit-rebase-interactive does not do anything every other times
-8. Should magit-boost-filter check on being on a Magit Boost buffer?
-9. commit amend crash on local repository
 * Performance Tests Raw Data :noexport:
 #+name: commit-amend-during-rebase
 |  Magit | Magit Boost |

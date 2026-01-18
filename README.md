@@ -1,0 +1,52 @@
+Magit Boost is an Emacs package meticulously engineered to dramatically accelerate Magit's performance, especially when operating over high-latency networks, such as corporate VPNs, cloud development environments, or any remote setup accessed via TRAMP.
+
+
+# The Problem
+
+Magit, by default, is highly optimized for local Git repositories where shell command execution and file system access are virtually instantaneous. However, this assumption breaks down severely in remote or high-latency environments. Magit frequently invokes numerous small `git` commands and performs individual file attribute checks (e.g., `file-exists-p`, `file-directory-p`, `file-truename`) for each file within the repository tree. Each of these operations, when executed remotely via TRAMP, incurs significant network round-trip latency, leading to a sluggish and frustrating user experience. A simple `magit-status` can take many seconds, or even dozens of seconds, on a poor connection.
+
+
+# The Solution
+
+Magit Boost addresses this fundamental performance bottleneck by advising key Magit and TRAMP functions to introduce a suite of optimizations:
+
+1.  **Improved Git commands processing**: The command processing is tailored for the simplicity of `Git` commands and offers an improved handling of stdout and stderr, removing unnecessary copying of files present in the default TRAMP implementation.
+
+2.  **Batching of File Attribute Checks:** TRAMP's individual queries for file properties (like existence, type, permissions, and true name) are notoriously slow over high-latency links. Magit Boost intercepts these requests and intelligently batches them into a single shell command. It then executes this single, comprehensive command within the persistent Bash session, parses the results, and injects them directly into TRAMP's internal cache. This drastically reduces the number of network round-trips required to build Magit's status buffer or interact with files.
+
+3.  **Optimized Git Command Implementations:** For frequently used `git` operations, particularly those related to `git rev-parse` (e.g., `--show-cdup`, `--show-toplevel`, `--git-dir`), Magit Boost provides optimized versions. These either leverage cached information within the persistent Bash process or perform basic path computations directly, avoiding the need to spawn even a `git` process in some cases.
+
+
+## Performance Impact
+
+In my testing, these optimizations have led to a remarkable 3-4x acceleration of Magit command execution times on remote repositories. Commands that previously took 10-15 seconds now complete in a few seconds, transforming the Magit experience from tedious to productive on slow networks.
+
+![img](performances.png)
+
+
+# Additional Feature: Progress Reporting
+
+Beyond raw speed, Magit Boost also offers an optional progress reporting mode. This mode provides visual feedback in the echo area, showing which Git command is currently executing and logging the total execution time of major Magit operations. This is invaluable on slow networks, as it confirms that Magit is actively working and allows users to observe the tangible performance benefits of Magit Boost in real-time.
+
+Magit Boost seamlessly integrates with your existing Magit workflow, activating automatically for TRAMP buffers when enabled.
+
+
+# Installation
+
+Add `magit-boost.el` to your Emacs load path and require it:
+
+    (require 'magit-boost)
+
+
+# Usage
+
+Enable `magit-boost-mode` globally to accelerate Magit operations:
+
+    (magit-boost-mode 1)
+
+The progress reporting feature can be enabled as follows:
+
+    (magit-boost-progress-mode 1)
+
+Magit-Boost disables itself on local Git repositories where it can be counter-productive.
+
