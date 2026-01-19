@@ -21,6 +21,8 @@ Magit Boost addresses this fundamental performance bottleneck by advising key Ma
 
 In my testing, these optimizations have led to a remarkable 3-4x acceleration of Magit command execution times on remote repositories. Commands that previously took 10-15 seconds now complete in a few seconds, transforming the Magit experience from tedious to productive on slow networks.
 
+The measurements shown in the diagram below were collected over a network connection to a server with a 50 to 60 ms ping latency.
+
 ![img](performances.png)
 
 
