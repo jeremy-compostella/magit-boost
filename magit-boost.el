@@ -529,7 +529,8 @@ This avoids invoking the slower default implementation of
     (funcall orig-fun file)))
 
 (defun magit-boost-start-file-process (orig-fun name buffer program &rest args)
-  (if (string= program "git")
+  (if (and (string= program "git")
+	   (tramp-tramp-file-p default-directory))
       (let ((local-dir (tramp-file-name-localname
 			(tramp-dissect-file-name default-directory))))
 	(with-magit-boost-buffer default-directory 'pty
