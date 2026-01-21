@@ -460,7 +460,7 @@ multiple synchronous remote calls with a single batch execution."
       0)))
 
 (defun magit-boost-rev-parse--git-dir (dir)
-  (insert (with-magit-boost-buffer dir 'pty
+  (insert (with-magit-boost-buffer-create dir 'pty
 	    magit-boost-git-dir))
   0)
 
