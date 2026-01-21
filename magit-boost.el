@@ -453,7 +453,7 @@ multiple synchronous remote calls with a single batch execution."
     0))
 
 (defun magit-boost-rev-parse--show-toplevel (dir)
-  (when-let* ((root (with-magit-boost-buffer-create dir 'pty
+  (when-let* ((root (with-magit-boost-buffer dir 'pty
 		      default-directory)))
     (with-parsed-tramp-file-name root r
       (insert r-localname)
